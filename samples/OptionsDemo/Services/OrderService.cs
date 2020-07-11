@@ -26,10 +26,10 @@ namespace OptionsDemo.Services
         {
             this._options = options;
 
-            //_options.OnChange(options =>
-            //{
-            //    Console.WriteLine($"配置发生了变更：{options.MaxOrderCount}");
-            //});
+            _options.OnChange(options =>
+            {
+                Console.WriteLine($"配置发生了变更：{options.MaxOrderCount}");
+            });
         }
 
         public int ShowMaxOrderCount()
