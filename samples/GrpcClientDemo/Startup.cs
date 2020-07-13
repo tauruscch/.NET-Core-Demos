@@ -10,6 +10,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Polly;
+using Polly.Bulkhead;
+using Polly.CircuitBreaker;
 using static GrpcServices.OrderGrpc;
 
 namespace GrpcClientDemo
@@ -52,7 +54,60 @@ namespace GrpcClientDemo
                 return message.Method == HttpMethod.Get ? registry.Get<IAsyncPolicy<HttpResponseMessage>>("retryforever") : Policy.NoOpAsync<HttpResponseMessage>();
             });
 
+            // 使用熔断
+            services.AddHttpClient("orderclientv3").AddPolicyHandler(Policy<HttpResponseMessage>.Handle<HttpRequestException>().CircuitBreakerAsync(
+                handledEventsAllowedBeforeBreaking: 10, // 失败10次就熔断
+                durationOfBreak: TimeSpan.FromSeconds(10), // 熔断10秒
+                onBreak: (r, t) => { }, // 熔断开启时触发的事件
+                onReset: () => { }, // 熔断恢复时触发的事件
+                onHalfOpen: () => { } // 尝试用部分流量去验证服务是否可用的事件
+                ));
 
+            // 使用高级熔断
+            services.AddHttpClient("orderclientv3").AddPolicyHandler(Policy<HttpResponseMessage>.Handle<HttpRequestException>().AdvancedCircuitBreakerAsync(
+                failureThreshold: 0.8, // 失败的比例
+                samplingDuration: TimeSpan.FromSeconds(10), // 采样时间，表示10秒内有80%失败就触发熔断
+                minimumThroughput: 100, // 10秒内请求量超过100个
+                durationOfBreak: TimeSpan.FromSeconds(20), // 熔断时长
+                onBreak: (r, t) => { },
+                onReset: () => { },
+                onHalfOpen: () => { }));
+
+
+            // 组合策略，熔断后重试3次，3次都失败，则降级响应返回默认数据
+            var breakPolicy = Policy<HttpResponseMessage>.Handle<HttpRequestException>().AdvancedCircuitBreakerAsync(
+                failureThreshold: 0.8,
+                samplingDuration: TimeSpan.FromSeconds(10),
+                minimumThroughput: 100,
+                durationOfBreak: TimeSpan.FromSeconds(20),
+                onBreak: (r, t) => { },
+                onReset: () => { },
+                onHalfOpen: () => { });
+            var message = new HttpResponseMessage()
+            {
+                Content = new StringContent("{}")
+            };
+            // BrokenCircuitException 为熔断后抛出的异常
+            var fallback = Policy<HttpResponseMessage>.Handle<BrokenCircuitException>().FallbackAsync(message);
+            var retry = Policy<HttpResponseMessage>.Handle<Exception>().WaitAndRetryAsync(3, i => TimeSpan.FromSeconds(1));
+            var fallbackBreak = Policy.WrapAsync(fallback, retry, breakPolicy);
+            services.AddHttpClient("httpv3").AddPolicyHandler(fallbackBreak);
+
+            // 限流策略
+            var bulk = Policy.BulkheadAsync<HttpResponseMessage>(
+                maxParallelization: 30, // 并发30
+                maxQueuingActions: 20, // 并发超过30时，还可以有20个进行排队
+                onBulkheadRejectedAsync: contxt => Task.CompletedTask // 请求被限流时触发的事件
+                );
+
+            // 组合限流和降级响应
+            var message2 = new HttpResponseMessage()
+            {
+                Content = new StringContent("{}")
+            };
+            var fallback2 = Policy<HttpResponseMessage>.Handle<BulkheadRejectedException>().FallbackAsync(message);
+            var fallbackbulk = Policy.WrapAsync(fallback2, bulk);
+            services.AddHttpClient("httpv4").AddPolicyHandler(fallbackbulk);
 
         }
 
