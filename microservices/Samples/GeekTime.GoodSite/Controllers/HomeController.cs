@@ -18,6 +18,8 @@ using Microsoft.AspNetCore.Cors;
 
 namespace GeekTime.GoodSite.Controllers
 {
+    // AutoValidateAntiforgeryToken 会对所有非GET, HEAD, OPTIONS, and TRACE 的请求进行反跨站脚本攻击的校验
+    //[AutoValidateAntiforgeryToken] 
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
@@ -65,15 +67,17 @@ namespace GeekTime.GoodSite.Controllers
             }
             try
             {
+                // 1. 使用LocalRedirect，只能跳转到本地页面，如果是跳转到外部页面，则会抛出异常。为了更友好，我们捕获异常，并跳转到我们自己的首页
+                //return LocalRedirect(returnUrl);
+
+                // 2. 当我们需要跳转自己的外部时，我们可以校验url合法性，再决定是否可以跳转
                 var uri = new Uri(returnUrl);
-                ///uri.Host
                 return Redirect(returnUrl);
             }
             catch
             {
                 return Redirect("/");
             }
-            //return Redirect(returnUrl);
         }
 
 
@@ -100,10 +104,6 @@ namespace GeekTime.GoodSite.Controllers
             return View();
         }
 
-
-
-
-
         [Authorize]
         [HttpPost]
         [EnableCors("api")]
@@ -119,30 +119,26 @@ namespace GeekTime.GoodSite.Controllers
             return new OrderModel { Id = 100, Date = DateTime.Now };
         }
 
-
         [ResponseCache(Duration = 6000, VaryByQueryKeys = new string[] { "query" })]
         public IActionResult GetAbc([FromQuery]string query)
         {
             return Content("abc" + DateTime.Now);
         }
 
-
         //[ResponseCache(Duration = 6000, VaryByQueryKeys = new string[] { "query" })]
         public IActionResult GetMem([FromServices]IMemoryCache cache, [FromQuery]string query)
         {
-
             var time = cache.GetOrCreate(query ?? "", entry =>
-              {
-                  entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(600);
-                  return DateTime.Now;
-              });
-
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(600);
+                return DateTime.Now;
+            });
             return Content("abc" + time);
         }
 
 
         //[ResponseCache(Duration = 6000, VaryByQueryKeys = new string[] { "query" })]
-        public IActionResult GetDis([FromServices] IDistributedCache cache, [FromServices]IMemoryCache memoryCache, [FromServices]IEasyCachingProvider easyCaching, [FromQuery]string query)
+        public IActionResult GetDis([FromServices] IDistributedCache cache, [FromServices]IEasyCachingProvider easyCaching, [FromQuery]string query)
         {
             #region IDistributedCache
             var key = $"GetDis-{query ?? ""}";
@@ -158,8 +154,6 @@ namespace GeekTime.GoodSite.Controllers
             #region IEasyCachingProvider
             //var key = $"GetDis-{query ?? ""}";
             //var time = easyCaching.Get(key, () => DateTime.Now.ToString(), TimeSpan.FromSeconds(600));
-
-
             #endregion
 
             return Content("abc" + time);

@@ -30,32 +30,40 @@ namespace GeekTime.GoodSite
                 .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
                 {
                     options.LoginPath = "/home/login";
-                    options.Cookie.HttpOnly = true;
+                    options.Cookie.HttpOnly = true;  // 设置为true，表示客户端不能通过脚本读取cookie
                 });
             services.AddControllersWithViews();
 
+            // 启用防跨站脚本攻击策略，设置请求头，服务端会同时校验指定header的值和cookie中的值是否一致
             services.AddAntiforgery(options =>
             {
                 options.HeaderName = "X-CSRF-TOKEN";
             });
 
-
-            //开启全局AntiforgeryToken验证
+            // 开启全局AntiforgeryToken验证
             //services.AddMvc(options => options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()));
 
-
-
-
+            // 1. 开启跨域，并增加跨域策略
             services.AddCors(options =>
             {
                 options.AddPolicy("api", builder =>
                  {
-                     builder.WithOrigins("https://localhost:5001").AllowAnyHeader().AllowCredentials().WithExposedHeaders("abc");
+                     builder.WithOrigins("https://localhost:5001") // 设置运行跨域访问的源地址
+                        .AllowAnyHeader() // 允许携带任何header
+                        .AllowCredentials() // 允许携带认证信息，比如：cookie
+                        .WithExposedHeaders("abc"); // 允许脚本能够访问到的响应header
 
-                     builder.SetIsOriginAllowed(orgin => true).AllowCredentials().AllowAnyHeader();
+                     // 也可以使用委托来设置运行跨域访问的源
+                     builder.SetIsOriginAllowed(orgin => {
+                         return true;
+                     }).AllowCredentials().AllowAnyHeader();
                  });
             });
+
+
             #endregion
+
+            // 增加缓存组件
             services.AddMemoryCache();
             services.AddStackExchangeRedisCache(options =>
             {
@@ -92,6 +100,8 @@ namespace GeekTime.GoodSite
 
             app.UseRouting();
             app.UseResponseCaching();
+
+            // 2. 使用跨域中间件
             app.UseCors();
 
             app.UseAuthentication();
