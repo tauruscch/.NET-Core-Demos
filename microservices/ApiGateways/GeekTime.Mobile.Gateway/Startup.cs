@@ -41,7 +41,7 @@ namespace GeekTime.Mobile.Gateway
             //});
             services.AddHealthChecks();
 
-            // 读取秘钥并注入，是为了在controller中读取来生成JWT的token
+            // 从配置文件中读取秘钥并注入，是为了在controller中读取来生成JWT的token
             var secrityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Configuration["SecurityKey"]));
             services.AddSingleton(secrityKey);
             // 设置默认的认证方案为cookie，AddCookie方法增加cookie认证方案，AddJwtBearer方法增加JWT认证方案，两种认证方式可以同时支持
