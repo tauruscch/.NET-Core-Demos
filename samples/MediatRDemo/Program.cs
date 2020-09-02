@@ -14,13 +14,14 @@ namespace MediatRDemo
             var services = new ServiceCollection();
 
             // 注入消息类，MediatR会扫描指定程序集下的消息/消息处理器
+            services.AddTransient(typeof(IPipelineBehavior<,>), typeof(MyPipelineBehavior<,>));
             services.AddMediatR(Assembly.GetExecutingAssembly());
 
             var serviceProvider = services.BuildServiceProvider();
 
             var mediator = serviceProvider.GetService<IMediator>();
 
-            //await mediator.Send(new MyCommand { CommandName = "cmd01" });
+            await mediator.Send(new MyCommand { CommandName = "cmd01" });
 
             await mediator.Publish(new MyEvent { EventName = "event01" });
 
@@ -70,6 +71,22 @@ namespace MediatRDemo
             }
         }
 
+        #endregion
+
+        #region RequestHandler的Command处理器委托，用于实现在Command执行前后的处理逻辑
+        internal class MyPipelineBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+        {
+            public async Task<TResponse> Handle(TRequest request, CancellationToken cancellationToken, RequestHandlerDelegate<TResponse> next)
+            {
+                var response = default(TResponse);
+                var typeName = request.GetGenericTypeName();
+                Console.WriteLine($"命令执行前：{typeName}");
+                response = await next();
+                Console.WriteLine($"命令执行后：{typeName}");
+
+                return response;
+            }
+        }
         #endregion
     }
 }
